@@ -75,11 +75,52 @@ namespace Dopamine.Core.Api.Lyrics
             return response.Substring(start, end - start);
         }
 
+        //WARNING: this function currently can't combine lyric with "offset" tag in translate!
+        private String CombineTranslateLyrics(LyricModel.Lrc lrc, LyricModel.Lrc tlrc)
+        {
+            if (tlrc != null && !string.IsNullOrEmpty(tlrc.lyric) && this.enableTLyric)
+            {
+                string res = "";
+                string timeLrc = ""; // Lrc Time(Origin)
+                string timeTLyric = ""; // Lrc Text(Translate)
+                string timeTLrc = ""; // Lrc Time(Translate)
+                string[] lrca = lrc.lyric.Split('['); // Lrc split to line without [
+                string[] tlrca = tlrc.lyric.Split('['); // TLrc split to line without [
+                Dictionary<string, string> tlrcMaps = new Dictionary<string, string>(); //Translated Lrc time&text
+
+                for (int i = 0; i < tlrca.Length; i++)
+                {
+                    timeTLrc = tlrca[i].Split(']')[0]; // time
+                    if (timeTLrc == null || string.IsNullOrEmpty(timeTLrc)) continue; // time is not null
+                    if (timeTLrc[0] >= '0' && timeTLrc[0] <= '9') tlrcMaps.Add(timeTLrc, '[' + tlrca[i]); // it is time instead of by, author etc
+                }
+
+                for (int i = 0; i < lrca.Length; i++)
+                {
+                    timeLrc = lrca[i].Split(']')[0];
+                    if (timeLrc == null || string.IsNullOrEmpty(timeLrc)) continue; // not null
+
+                    if (tlrcMaps.TryGetValue(timeLrc, out timeTLyric)) // have translate
+                    {
+                        res += "[" + lrca[i];
+                        res += timeTLyric;
+                    }
+                    else
+                    {
+                        res += "[" + lrca[i];
+                    }
+                }
+                return res;
+            }
+            return lrc.lyric;
+        }
+
         private async Task<string> ParseLyricsAsync(string trackId)
         {
             string resJson = await httpClient.GetStringAsync(String.Format(apiLyricsFormat, trackId));
             LyricModel res = JsonConvert.DeserializeObject<LyricModel>(resJson);
 
+            /*
             if (res.tlyric == null || string.IsNullOrEmpty(res.tlyric.lyric) || !this.enableTLyric)
             {
                 return res.lrc.lyric;
@@ -88,6 +129,8 @@ namespace Dopamine.Core.Api.Lyrics
             {
                 return res.tlyric.lyric;
             }
+            */
+            return CombineTranslateLyrics(res.lrc, res.tlyric);
         }
 
         public string SourceName => this.info.NeteaseLyrics;
